@@ -26,6 +26,7 @@ Gui Add, Radio, vDecode gDecode x104 y119 w58 h17, Decode
 Gui Add, GroupBox, x25 y155 w150 h45, Type
 Gui Add, Radio, vText gText x36 y174 w50 h17 Checked, String
 Gui Add, Radio, vFile gFile x104 y174 w44 h17, File
+Gui -E0x10
 Gui Show, w200 h215, Base64 Encoder/Decoder
 Return
 
@@ -41,20 +42,22 @@ EncodeDecodeGUI:
 Gui Submit
 Gui New, % Text?"-MaximizeBox":"-MinimizeBox", % "Base64 " (File?"File ":"Text ") . (Encode?"Encoder":"Decoder")
 Gui Color, White
-Gui Add, Text, % "x24 y6 w202 h26 Center " (!(File && Encode)?"0x200":""), % (File && Encode)?"Click the Encode button to select the file. Encoded file will appear here":"Enter the " (File?"file":"text") " to " (Encode?"encode":"decode") " here"
-Gui Add, Edit, vInput gTextChange x24 y37 w202 h178 ;, % "Note: if the " (File?"file to encode":"entered string") " is too large, the window will freeze when it tries to load it here."
+Gui Add, Text, % "x24 y6 w202 h26 Center " (!(File && Encode)?"0x200":""), % (File && Encode)?"Click the button to select the file. Encoded file will appear here":"Enter the " (File?"file":"Base64 string") " to " (Encode?"encode":"decode") " here"
+Gui Add, Edit, vInput gTextChange x24 y37 w202 h178, % (File && Encode)?"Note: You can also drag and drop the file here.": ""
 if !(Decode && File)
 	Gui Add, CheckBox, % "vCopyToClipboard " (File?"x42":"x253") " y220 w166 h26", % "Copy the " (Encode?"encoded ":"decoded ") (File?"file":"string") " to the clipboard"
 if !(Encode && File)
 	Gui Add, CheckBox, vLoadString x42 y220 w166 h26, % "Load the string to " (Encode?"encode":"decode") " from a text file"
 Gui Add, Text, % "x0 " (File?"y250 w251":"y286 w463") " h46 -Background"
-Gui Add, Button, % "gEncodeDecode " (File?"x85 y262":"x191 y298") " w80 h23 Default", % Encode?"Encode":"Decode"
+Gui Add, Button, % "gEncodeDecode " (File?"x85 y262":"x191 y298") " w80 h23 Default", % Encode?(File?"Select a file":"Encode"):(File?"Save the file":"Decode")
 if Text
 {
 	Gui Add, Edit, vOutput x237 y37 w202 h178 ReadOnly
 	Gui Add, Text, x257 y13 w151 h17, % (Encode?"Encoded":"Decoded") " string will appear here"
 	Gui Add, CheckBox, vLiveModeOn gLiveMode x150 y259 w162 h18, % "Live Mode (Real-time " (Encode?"encode":"decode") ")"
 }
+if (File && Encode)
+	Gui +E0x10
 Gui Show, % File?"w251 h296":"w463 h332"
 Return
 
@@ -75,6 +78,19 @@ if LiveModeOn
 		GuiControl,, Output, Invalid Base64 string.
 	else
 		GuiControl,, Output, % Encode?Base64Encode(Input):Base64Decode(Input)
+}
+Return
+
+GuiDropFiles:
+if (File && Encode) ;Only for encoding files
+{	
+	IsDragAndDrop := 1
+	Loop, Parse, A_GuiEvent, `n
+	{
+		FileToEncode := A_LoopField
+		break
+	}
+	Goto EncodeDecode
 }
 Return
 
@@ -99,9 +115,13 @@ if LoadString ;Load a string from a text file
 }
 if (File && Encode)
 {
-	FileSelectFile FileToEncode, 3,, Select the file to encode
-	if ErrorLevel
-		Return
+	if !IsDragAndDrop
+	{
+		FileSelectFile FileToEncode, 3,, Select the file to encode
+		if ErrorLevel
+			Return
+	}
+	IsDragAndDrop := 0
 	OpenFile := FileOpen(FileToEncode, "r")
 	Length := OpenFile.Length
 	OpenFile.RawRead(Input, Length)
@@ -126,7 +146,7 @@ if Decode
 		SaveFile.Close()
 		ToolTip
 		FileGetSize Length, DecodedFile
-		if !Length
+		if (Length = 0)
 		{
 			FileDelete % DecodedFile
 			MsgBox 16, Base64 Decoder, There was an error while decoding the file.
@@ -145,6 +165,7 @@ if Decode
 		Return
 	}
 }
+
 ;Encode/Decode text & Encode file
 ToolTip % (Encode?"Encoding":"Decoding") " the " (File?"file":"string") "..."
 Result := Encode?Base64Encode(File ? Base64 : Input, File ? Input : "", File ? Length : ""):Base64Decode(Input)
